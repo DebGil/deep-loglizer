@@ -2,7 +2,6 @@ import os
 import re
 import pickle
 import argparse
-import random
 import pandas as pd
 import numpy as np
 from utils import decision, json_pretty_dump
@@ -14,11 +13,11 @@ np.random.seed(seed)
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--train_anomaly_ratio", default=0.1, type=float)
+parser.add_argument("--train_anomaly_ratio", default=0.5, type=float)
 
 params = vars(parser.parse_args())
 
-data_name = f'mylog_sampled_{params["train_anomaly_ratio"]}_tar'
+data_name = f'mylog_{params["train_anomaly_ratio"]}_tar'
 data_dir = "../data/processed/mylog_100k"
 
 params = {
@@ -73,22 +72,29 @@ def preprocess_mylog(
     label_data["IsError"] = label_data["IsError"].map(
         lambda x: int(x) if isinstance(x, bool) else int(str(x).lower() == "true"))
 
+    average_trace_id_length = struct_log["TraceId"].value_counts().mean()
+    min_window_size = int(average_trace_id_length * 0.9)  # adjust the multiplier as needed
+    max_window_size = int(average_trace_id_length * 1.1)  # adjust the multiplier as needed
+
+    window_size = np.random.randint(min_window_size, max_window_size)
 
     label_data_dict = {}
+    window_count = 0
 
     session_dict = OrderedDict()
     column_idx = {col: idx for idx, col in enumerate(struct_log.columns)}
     for _, row in enumerate(struct_log.values):
 
-        id_list= row[column_idx["TraceId"]]
-        if id_list not in session_dict:
-            session_dict[id_list] = defaultdict(list)
-        session_dict[id_list]["templates"].append(row[column_idx["EventTemplate"]])
+        if window_count not in session_dict:
+            session_dict[window_count] = defaultdict(list)
+            window_size = np.random.randint(min_window_size, max_window_size)
+        session_dict[window_count]["templates"].append(row[column_idx["EventTemplate"]])
+        session_dict[window_count]["lineIds"].append(row[column_idx["LineId"]])
+
+        if len(session_dict[window_count]["templates"]) >= window_size:
+            window_count += 1
 
     print('termine de asignar templates')
-
-    total_templates = 0
-    total_sessions = len(session_dict)
 
     total_templates = 0
     total_sessions = len(session_dict)
@@ -105,51 +111,38 @@ def preprocess_mylog(
 
     print("Average number of templates per session:", average_templates_per_session)
 
-    total_templates = sum(len(session_data["templates"]) for session_data in session_dict.values())
-
-    # Calculate the number of templates to drop (10% of total templates)
-    templates_to_drop = int(0.2 * total_templates)
-
-    # Create a list of all template indices
-    all_template_indices = [(session_id, idx) for session_id, session_data in session_dict.items()
-                            for idx, _ in enumerate(session_data["templates"])]
-
-    # Randomly select templates to drop
-    templates_indices_to_drop = random.sample(all_template_indices, templates_to_drop)
-
-    # Remove the selected templates from session_dict
-    for session_id, index_to_drop in sorted(templates_indices_to_drop, reverse=True):
-        session_dict[session_id]["templates"].pop(index_to_drop)
-
-    # Recalculate the total number of templates after dropping
-    total_templates_after_drop = sum(len(session_data["templates"]) for session_data in session_dict.values())
-
-    print("Total number of templates before dropping:", total_templates)
-    print("Total number of templates after dropping:", total_templates_after_drop)
-
-    # Iterate over unique combinations
     for index, row in struct_log.iterrows():
-        print(index
-              )
-        traceid_data = label_data.loc[(label_data['TraceId'] == row['TraceId'])]
+        traceid_spanid_data = label_data.loc[
+            (label_data['TraceId'] == row['TraceId']) &
+            (label_data['SpanId'] == row['SpanId']) &
+            (label_data['Service'] == row['Service'])
+            ]
         # Check if any row in the filtered data has isError as True
-        if any(traceid_data['IsError']):
-            label_data_dict[ row["TraceId"] ] = 1
+        if any(traceid_spanid_data['IsError']):
+            label_data_dict[ row["LineId"] ] = 1
         else:
             # Otherwise, store False
-            label_data_dict[ row["TraceId"] ] = 0
+            label_data_dict[ row["LineId"] ] = 0
 
     print('termine de asignar labels')
 
+    for window_id, session_data in session_dict.items():
+        line_ids = session_data["lineIds"]
+        label_assigned = False  # Flag to track if any label has been assigned
+        for line_id in line_ids:
+            if line_id in label_data_dict:
+                label = label_data_dict[line_id]
+                if label == 1:
+                    session_data["labels"] = label
+                    label_assigned = True
+                    break  # Move to the next session
+                elif label == 0:
+                    # Keep checking other line_ids
+                    continue
+        if not label_assigned:
+            # If no label of 1 found, assign 0
+            session_data["labels"] = 0
 
-
-
-    for k in list(session_dict.keys()):
-        try:
-            session_dict[k]["label"] = label_data_dict[k]
-        except KeyError:
-            del session_dict[k]
-            continue
     print('termine de asignar labels a las sesiones')
 
 
@@ -160,7 +153,16 @@ def preprocess_mylog(
         np.random.shuffle(session_idx)
 
     session_ids = np.array(list(session_dict.keys()))
-    session_labels = np.array(list(map(lambda x: label_data_dict[x], session_ids)))
+    # session_labels = np.array(list(map(lambda x: label_data_dict[x], session_ids)))
+    labels_list = []
+
+    # Iterate over each session in session_dict
+    for session_data in session_dict.values():
+        # Get the 'labels' from the session_data and append to the labels_list
+        labels_list.append(session_data['labels'])
+
+    # Convert the labels_list to a NumPy array
+    session_labels = np.array(labels_list)
 
     train_lines = int((1 - test_ratio) * len(session_idx))
     test_lines = int(test_ratio * len(session_idx))
@@ -170,23 +172,22 @@ def preprocess_mylog(
 
     session_id_train = session_ids[session_idx_train]
     session_id_test = session_ids[session_idx_test]
-    session_labels_train = session_labels[session_idx_train]
-    session_labels_test = session_labels[session_idx_test]
 
     print("Total # sessions: {}".format(len(session_ids)))
 
+    print(train_anomaly_ratio , "train anomaly ratio")
     session_train = {
         k: session_dict[k]
         for k in session_id_train
-        if (session_dict[k]["label"] == 0)
-        or (session_dict[k]["label"] == 1 and decision(train_anomaly_ratio))
+        if (session_dict[k]["labels"] == 0)
+        or (session_dict[k]["labels"] == 1 and decision(train_anomaly_ratio))
 
     }
 
     session_test = {k: session_dict[k] for k in session_id_test}
 
-    session_labels_train = [v["label"] for k, v in session_train.items()]
-    session_labels_test = [v["label"] for k, v in session_test.items()]
+    session_labels_train = [v["labels"] for k, v in session_train.items()]
+    session_labels_test = [v["labels"] for k, v in session_test.items()]
 
     train_anomaly = 100 * sum(session_labels_train) / len(session_labels_train)
     test_anomaly = 100 * sum(session_labels_test) / len(session_labels_test)

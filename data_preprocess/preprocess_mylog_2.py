@@ -23,7 +23,7 @@ data_dir = "../data/processed/mylog_100k"
 params = {
     "log_file": "../data/mylog/mylog.log_structured.csv",
     "label_file": "../data/mylog/anomaly_label.csv",
-    "test_ratio": 0.1,
+    "test_ratio": 0.8,
     "random_sessions": True,  # shuffle sessions
     "train_anomaly_ratio": params["train_anomaly_ratio"],
 }
@@ -85,6 +85,21 @@ def preprocess_mylog(
         session_dict[id_list]["templates"].append(row[column_idx["EventTemplate"]])
 
     print('termine de asignar templates')
+
+    total_templates = 0
+    total_sessions = len(session_dict)
+
+    # Iterate over each session in session_dict
+    for session_id, session_data in session_dict.items():
+        # Get the number of templates in the current session
+        num_templates = len(session_data["templates"])
+        # Add the number of templates to the total
+        total_templates += num_templates
+
+    # Calculate the average number of templates per session
+    average_templates_per_session = total_templates / total_sessions
+
+    print("Average number of templates per session:", average_templates_per_session)
 
     # Iterate over unique combinations
     for index, row in struct_log.iterrows():
