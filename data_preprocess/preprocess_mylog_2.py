@@ -13,7 +13,7 @@ np.random.seed(seed)
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--train_anomaly_ratio", default=0.1, type=float)
+parser.add_argument("--train_anomaly_ratio", default=0.5, type=float)
 
 params = vars(parser.parse_args())
 

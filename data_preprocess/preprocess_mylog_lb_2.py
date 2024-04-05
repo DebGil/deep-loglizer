@@ -17,7 +17,7 @@ parser.add_argument("--train_anomaly_ratio", default=0.5, type=float)
 
 params = vars(parser.parse_args())
 
-data_name = f'mylog_{params["train_anomaly_ratio"]}_lb_tar'
+data_name = f'mylog_{params["train_anomaly_ratio"]}_lb_split_tar'
 data_dir = "../data/processed/mylog_100k"
 
 params = {
@@ -184,29 +184,60 @@ def preprocess_mylog(
 
     }
 
-    session_test = {k: session_dict[k] for k in session_id_test}
+    # session_test = {k: session_dict[k] for k in session_id_test}
+
+    session_test_even = {}
+    session_test_odd = {}
+
+    # Iterate over each session id in session_id_test
+    for k in session_id_test:
+        # Get the session data from session_dict
+        session_data = session_dict[k]
+
+        # Extract labels, templates, and lineids from session_data
+        labels = session_data['label']
+        templates = session_data['templates']
+
+        # Create session test with even position templates
+        session_test_even[k] = {
+            'label': labels,
+            'templates': templates[::2],  # Get even position elements of templates
+        }
+
+        # Create session test with odd position templates
+        session_test_odd[k] = {
+            'label': labels,
+            'templates': templates[1::2],  # Get odd position elements of templates
+        }
+
 
     session_labels_train = [v["label"] for k, v in session_train.items()]
-    session_labels_test = [v["label"] for k, v in session_test.items()]
+    session_labels_even_test = [v["label"] for k, v in session_test_even.items()]
+    session_labels_odd_test = [v["label"] for k, v in session_test_odd.items()]
 
-    session_templates_test = [v["templates"] for k, v in session_test.items()]
-
-    print("# test sessions ", len(session_templates_test))
+    session_templates_even_test = [v["templates"] for k, v in session_test_even.items()]
+    session_templates_odd_test = [v["templates"] for k, v in session_test_odd.items()]
 
     train_anomaly = 100 * sum(session_labels_train) / len(session_labels_train)
-    test_anomaly = 100 * sum(session_labels_test) / len(session_labels_test)
+    test_anomaly_even = 100 * sum(session_labels_even_test) / len(session_labels_even_test)
+    test_anomaly_odd = 100 * sum(session_labels_odd_test) / len(session_labels_odd_test)
+
 
     print("# train sessions: {} ({:.2f}%)".format(len(session_train), train_anomaly))
-    print("# test sessions: {} ({:.2f}%)".format(len(session_test), test_anomaly))
+    print("# test sessions even: {} ({:.2f}%)".format(len(session_test_even), test_anomaly_even))
+    print("# test sessions odd: {} ({:.2f}%)".format(len(session_test_odd), test_anomaly_odd))
+
 
     with open(os.path.join(data_dir, "session_train.pkl"), "wb") as fw:
         pickle.dump(session_train, fw)
-    with open(os.path.join(data_dir, "session_test.pkl"), "wb") as fw:
-        pickle.dump(session_test, fw)
+    with open(os.path.join(data_dir, "session_test_even.pkl"), "wb") as fw:
+        pickle.dump(session_test_even, fw)
+    with open(os.path.join(data_dir, "session_test_odd.pkl"), "wb") as fw:
+        pickle.dump(session_test_odd, fw)
     json_pretty_dump(params, os.path.join(data_dir, "data_desc.json"))
 
     print("Saved to {}".format(data_dir))
-    return session_train, session_test
+    return session_train, session_test_even, session_test_odd
 
 
 if __name__ == "__main__":
