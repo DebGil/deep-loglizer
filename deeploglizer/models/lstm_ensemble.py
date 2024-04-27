@@ -36,7 +36,7 @@ class Attention(nn.Module):
             tensor.data.fill_(0)
 
 
-class LSTM(ForcastBasedModel):
+class LSTM_ENSEMBLE(ForcastBasedModel):
     def __init__(
         self,
         meta_data,

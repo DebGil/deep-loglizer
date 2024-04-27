@@ -4,12 +4,16 @@ import torch
 import logging
 import numpy as np
 import pandas as pd
+import pickle
+import random
+import string
 from torch import nn
 from collections import defaultdict
 from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
 
 from deeploglizer.common.utils import set_device, tensor2flatten_arr
 
+data_dir = "../data/results"
 
 class Embedder(nn.Module):
     def __init__(
@@ -79,13 +83,13 @@ class ForcastBasedModel(nn.Module):
         else:
             logging.info(f'Unrecognized feature type, except sequentials or semantics, got {feature_type}')
 
-    def evaluate(self, test_loader, dtype="test"):
+    def evaluate(self, test_loader, epoch, dtype="test"):
         logging.info("Evaluating {} data.".format(dtype))
 
         if self.label_type == "next_log":
             return self.__evaluate_next_log(test_loader, dtype=dtype)
         elif self.label_type == "anomaly":
-            return self.__evaluate_anomaly(test_loader, dtype=dtype)
+            return self.__evaluate_anomaly(test_loader, epoch,  dtype=dtype)
         elif self.label_type == "none":
             return self.__evaluate_recst(test_loader, dtype=dtype)
 
@@ -135,7 +139,7 @@ class ForcastBasedModel(nn.Module):
             logging.info({k: f"{v:.3f}" for k, v in eval_results.items()})
             return eval_results
 
-    def __evaluate_anomaly(self, test_loader, dtype="test"):
+    def __evaluate_anomaly(self, test_loader, epoch, dtype="test"):
 
         self.eval()  # set to evaluation mode
         with torch.no_grad():
@@ -160,6 +164,7 @@ class ForcastBasedModel(nn.Module):
             use_cols = ["session_idx", "window_anomalies", "window_preds"]
             session_df = store_df[use_cols].groupby("session_idx", as_index=False).sum()
             pred = (session_df[f"window_preds"] > 0).astype(int)
+
             y = (session_df["window_anomalies"] > 0).astype(int)
 
             eval_results = {
@@ -168,6 +173,18 @@ class ForcastBasedModel(nn.Module):
                 "pc": precision_score(y, pred),
                 "acc": accuracy_score(y, pred),
             }
+            letters = string.ascii_lowercase
+            digits = string.digits
+            pred_random_filename = "pred_epoch_" + str(epoch) + "_"+ ''.join(random.choices(letters + digits, k=8)) + '_' + str(int(time.time())) +  ".pkl"
+            print("Dumping predictions to pickle file", pred_random_filename)
+            with open(os.path.join(data_dir, pred_random_filename), "wb") as f:
+                pickle.dump(pred, f)
+
+            label_random_filename = "label_epoch_" + str(epoch) + "_" + ''.join(random.choices(letters + digits, k=8)) + '_' + str(int(time.time())) + ".pkl"
+            print("Dumping labels to pickle file", label_random_filename)
+            with open(os.path.join(data_dir, label_random_filename), "wb") as f:
+                pickle.dump(y, f)
+
             logging.info({k: f"{v:.3f}" for k, v in eval_results.items()})
             return eval_results
 
@@ -180,7 +197,11 @@ class ForcastBasedModel(nn.Module):
             for batch_input in test_loader:
                 return_dict = model.forward(self.__input2device(batch_input))
                 y_pred = return_dict["y_pred"]
+                logging.info(self.topk )
+                logging.info(y_pred.size())
+
                 y_prob_topk, y_pred_topk = torch.topk(y_pred, self.topk)  # b x topk
+                logging.info(len(y_pred_topk))
 
                 store_dict["session_idx"].extend(
                     tensor2flatten_arr(batch_input["session_idx"])
@@ -287,6 +308,7 @@ class ForcastBasedModel(nn.Module):
         for epoch in range(1, epoches + 1):
             epoch_time_start = time.time()
             model = self.train()
+
             optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
             batch_cnt = 0
@@ -306,7 +328,7 @@ class ForcastBasedModel(nn.Module):
             self.time_tracker["train"] = epoch_time_elapsed
 
             if test_loader is not None and (epoch % 1 == 0):
-                eval_results = self.evaluate(test_loader)
+                eval_results = self.evaluate(test_loader, epoch)
                 if eval_results["f1"] > best_f1:
                     best_f1 = eval_results["f1"]
                     best_results = eval_results

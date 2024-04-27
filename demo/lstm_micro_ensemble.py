@@ -6,7 +6,7 @@ sys.path.append("../")
 import argparse
 from torch.utils.data import DataLoader
 
-from deeploglizer.models import LSTM
+from deeploglizer.models import LSTM_ENSEMBLE
 from deeploglizer.common.preprocess import FeatureExtractor
 from deeploglizer.common.dataloader_ensemble import load_sessions_ensemble, log_dataset
 from deeploglizer.common.utils import seed_everything, dump_final_results, dump_params
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         dataset_test, batch_size=4096, shuffle=False, pin_memory=True
     )
 
-    model = LSTM(meta_data=ext.meta_data, model_save_path=model_save_path, **params)
+    model = LSTM_ENSEMBLE(meta_data=ext.meta_data, model_save_path=model_save_path, **params)
 
     eval_results = model.fit(
         dataloader_train,
