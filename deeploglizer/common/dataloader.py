@@ -28,6 +28,7 @@ def load_sessions(data_dir):
     with open(os.path.join(data_dir, "session_test.pkl"), "rb") as fr:
         session_test = pickle.load(fr)
 
+
     train_labels = [
         v["label"] if not isinstance(v["label"], list) else int(sum(v["label"]) > 0)
         for _, v in session_train.items()

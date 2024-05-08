@@ -192,9 +192,13 @@ class FeatureExtractor(BaseEstimator):
                     i += stride
                 else:
                     window = templates[i:-1]
+                    # print("Length of templates:", len(templates))
+                    # print("Content of templates:", templates)
                     window.extend(["PADDING"] * (self.window_size - len(window)))
-                    next_log = self.log2id_train.get(templates[-1], 1)
-
+                    if templates:
+                        next_log = self.log2id_train.get(templates[-1], 1)
+                    else:
+                        break
                     if isinstance(data_dict["label"], list):
                         window_anomaly = int(1 in data_dict["label"][i:])
                     else:

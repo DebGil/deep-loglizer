@@ -13,17 +13,18 @@ np.random.seed(seed)
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--train_anomaly_ratio", default=0.5, type=float)
+parser.add_argument("--train_anomaly_ratio", default=1.0, type=float)
 
 params = vars(parser.parse_args())
 
-data_name = f'mylog_{params["train_anomaly_ratio"]}_tar'
+data_name = f'mylog_{params["train_anomaly_ratio"]}_trace_tar'
 data_dir = "../data/processed/mylog_100k"
 
 params = {
-    "log_file": "../data/mylog/mylog.log_structured.csv",
-    "label_file": "../data/mylog/anomaly_label.csv",
-    "test_ratio": 0.8,
+    "log_file": "../data/mylog/normal0726data-raw_log_small.log_structured_sorted.csv",
+    "label_file": "../data/mylog/normal0726data-SUCCESS_SpanData.csv",
+
+    "test_ratio": 0.2,
     "random_sessions": True,  # shuffle sessions
     "train_anomaly_ratio": params["train_anomaly_ratio"],
 }
@@ -103,8 +104,6 @@ def preprocess_mylog(
 
     # Iterate over unique combinations
     for index, row in struct_log.iterrows():
-        print(index
-              )
         traceid_data = label_data.loc[(label_data['TraceId'] == row['TraceId'])]
         # Check if any row in the filtered data has isError as True
         if any(traceid_data['IsError']):

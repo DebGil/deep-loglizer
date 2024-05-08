@@ -64,7 +64,10 @@ def preprocess_hdfs(
     column_idx = {col: idx for idx, col in enumerate(struct_log.columns)}
     for _, row in enumerate(struct_log.values):
         blkId_list = re.findall(r"(blk_-?\d+)", row[column_idx["Content"]])
+
         blkId_set = set(blkId_list)
+
+
         for blk_Id in blkId_set:
             if blk_Id not in session_dict:
                 session_dict[blk_Id] = defaultdict(list)

@@ -6,7 +6,7 @@ sys.path.append("../")
 import argparse
 from torch.utils.data import DataLoader
 
-from deeploglizer.models import LSTM_ENSEMBLE
+from deeploglizer.models import LSTM
 from deeploglizer.common.preprocess import FeatureExtractor
 from deeploglizer.common.dataloader_ensemble import load_sessions_ensemble, log_dataset
 from deeploglizer.common.utils import seed_everything, dump_final_results, dump_params
@@ -23,20 +23,20 @@ parser.add_argument("--num_directions", default=2, type=int)
 parser.add_argument("--embedding_dim", default=32, type=int)
 
 ##### Dataset params
-parser.add_argument("--dataset", default="HDFS", type=str)
+parser.add_argument("--dataset", default="mylog", type=str)
 parser.add_argument(
-    "--data_dir", default="../data/processed/mylog_100k/mylog_1.0_tar", type=str
+    "--data_dir", default="../data/processed/mylog_100k/mylog_0.5_ensemble_nolb_tar", type=str
 )
 
-parser.add_argument("--train_file", default="/session_train_one.pkl", type=str)
-parser.add_argument("--test_file", default="/session_test_even.pkl", type=str)
+parser.add_argument("--train_file", default="session_train_two.pkl", type=str)
+parser.add_argument("--test_file", default="session_test.pkl", type=str)
 
 parser.add_argument("--window_size", default=10, type=int)
 parser.add_argument("--stride", default=1, type=int)
 
 ##### Input params
 parser.add_argument("--feature_type", default="sequentials", type=str, choices=["sequentials", "semantics"])
-parser.add_argument("--label_type", default="next_log", type=str)
+parser.add_argument("--label_type", default="anomaly", type=str)
 parser.add_argument("--use_tfidf", action="store_true")
 parser.add_argument("--max_token_len", default=50, type=int)
 parser.add_argument("--min_token_count", default=1, type=int)
@@ -49,7 +49,7 @@ parser.add_argument("--min_token_count", default=1, type=int)
 parser.add_argument("--epoches", default=100, type=int)
 parser.add_argument("--batch_size", default=1024, type=int)
 parser.add_argument("--learning_rate", default=0.01, type=float)
-parser.add_argument("--topk", default=10, type=int)
+parser.add_argument("--topk", default=6, type=int)
 parser.add_argument("--patience", default=3, type=int)
 
 ##### Others
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         dataset_test, batch_size=4096, shuffle=False, pin_memory=True
     )
 
-    model = LSTM_ENSEMBLE(meta_data=ext.meta_data, model_save_path=model_save_path, **params)
+    model = LSTM(meta_data=ext.meta_data, model_save_path=model_save_path, **params)
 
     eval_results = model.fit(
         dataloader_train,
