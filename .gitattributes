@@ -1,0 +1,2 @@
+data/mylog/2301-0306-sampled-mylog.log_structured.csv filter=lfs diff=lfs merge=lfs -text
+data/mylog/anomaly_labelmylog.log_structured-fullF0204.csv filter=lfs diff=lfs merge=lfs -text
